@@ -1,13 +1,37 @@
+use std::{f32::consts::PI, fmt::Display, str::FromStr};
+
 use super::{
     area::Area,
     collisions::{Contains, Points},
 };
-use std::f32::consts::PI;
 
 pub struct Circle {
     pub x: f32,
     pub y: f32,
     pub radius: f32,
+}
+
+impl Display for Circle {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Circle ({}, {}) {}", self.x, self.y, self.radius)
+    }
+}
+
+impl FromStr for Circle {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split(" ").collect::<Vec<_>>();
+        if parts.len() != 3 {
+            return Err(anyhow::anyhow!("Badly formed circle"));
+        }
+
+        return Ok(Circle {
+            x: parts[0].parse()?,
+            y: parts[1].parse()?,
+            radius: parts[2].parse()?,
+        });
+    }
 }
 
 impl Contains for Circle {

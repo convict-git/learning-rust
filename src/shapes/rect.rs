@@ -2,13 +2,31 @@ use super::{
     area::Area,
     collisions::{Contains, Points, PointsIter},
 };
-use std::fmt::Display;
+use std::{fmt::Display, str::FromStr};
 
 pub struct Rect {
     pub x: f32,
     pub y: f32,
     pub height: f32,
     pub width: f32,
+}
+
+impl FromStr for Rect {
+    type Err = anyhow::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let parts = s.split(" ").collect::<Vec<_>>();
+        if parts.len() != 4 {
+            return Err(anyhow::anyhow!("Badly formed rectangle"));
+        }
+
+        return Ok(Rect {
+            x: parts[0].parse()?,
+            y: parts[1].parse()?,
+            height: parts[2].parse()?,
+            width: parts[3].parse()?,
+        });
+    }
 }
 
 impl Contains for Rect {
