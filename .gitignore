@@ -1,0 +1,24 @@
+# typescript
+/node_modules/
+
+# Compiled files
+*.o
+*.out
+*.so
+*.dylib
+*.dll
+*.rlib
+main
+
+# Executable files
+/target/
+*.exe
+
+# Intermediate files
+*.lock
+Cargo.lock
+
+# IDE and editor specific files
+/.idea/
+/*.rs.bk # vim
+/*.swap # vim
