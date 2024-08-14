@@ -1,7 +1,8 @@
+/*
 mod shapes;
 use shapes::{collisions::Collidable, shape::Shape};
 
-fn main() {
+fn check_collisions() {
     let valid_shapes = std::fs::read_to_string("shapes_input")
         .expect("Error reading the file shapes_input")
         .lines()
@@ -17,4 +18,12 @@ fn main() {
                 println!("{} collides with {}", shape_x, shape_y);
             }
         });
+}
+*/
+
+mod docs;
+use docs::guessing_game::play;
+
+fn main() {
+    play();
 }
