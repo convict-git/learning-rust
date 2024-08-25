@@ -1,4 +1,3 @@
-/*
 mod shapes;
 use shapes::{collisions::Collidable, shape::Shape};
 
@@ -19,11 +18,11 @@ fn check_collisions() {
             }
         });
 }
-*/
 
 mod docs;
-use docs::guessing_game::play;
+// use docs::guessing_game::play;
+use docs::match_docs::push_down_reference;
 
 fn main() {
-    play();
+    check_collisions();
 }
