@@ -40,10 +40,10 @@ impl FromStr for Shape {
 // for Collidable trait to work for shapes, we can implement Points and Contains
 
 impl Points for Shape {
-    fn points(&self) -> super::collisions::PointsIter {
+    fn get_points_iter(&self) -> super::collisions::PointsIter {
         match self {
-            Shape::Rect(r) => r.points(),
-            Shape::Circle(c) => c.points(),
+            Shape::Rect(r) => r.get_points_iter(),
+            Shape::Circle(c) => c.get_points_iter(),
         }
     }
 }
