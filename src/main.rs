@@ -23,11 +23,11 @@ fn check_collisions() {
 }
 */
 
-use crate::collections::vectors::try_outs;
+use crate::collections::vectors::{try_outs_1, try_outs_2};
 use crate::docs::{
     guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest,
 };
 
 fn main() {
-    try_outs();
+    try_outs_2();
 }
