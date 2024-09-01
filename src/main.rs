@@ -23,14 +23,18 @@ fn check_collisions() {
 }
 */
 
-use crate::collections::{
-    strings::{add_assign, deref_coercion, indexing},
-    vectors::{try_outs_1, try_outs_2},
-};
-use crate::docs::{
-    guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest,
+use crate::{
+    collections::{
+        hash_maps::{
+            basics as hash_map_basics, ref_lifetime_vague as hash_map_ref_lifetime_value,
+            update_value,
+        },
+        strings::{add_assign, deref_coercion, indexing},
+        vectors::{try_outs_1, try_outs_2},
+    },
+    docs::{guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest},
 };
 
 fn main() {
-    indexing();
+    update_value();
 }
