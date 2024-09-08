@@ -1,4 +1,4 @@
-const list = [1, 2, 3].map(x => x + 1);
+c/onst list = [1, 2, 3].map(x => x + 1);
 console.log(list);
 
 type Item = string | number;

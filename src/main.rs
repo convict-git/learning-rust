@@ -1,11 +1,12 @@
 mod collections;
 mod docs;
+mod errors;
 mod shapes;
 /*
 use shapes::{collisions::Collidable, shape::Shape};
 
 fn check_collisions() {
-    let valid_shapes = std::fs::read_to_string("shapes_input")
+    let valid_shapes = std::fs::read_to_string("inputs/shapes_input")
         .expect("Error reading the file shapes_input")
         .lines()
         .filter_map(|line| line.parse::<Shape>().ok())
@@ -33,8 +34,22 @@ use crate::{
         vectors::{try_outs_1, try_outs_2},
     },
     docs::{guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest},
+    errors::recoverable::{
+        propagating_error_basic, propagating_errors, propagating_errors_with_option,
+    },
 };
 
+pub fn read_from_file() {
+    // match propagating_error_basic("inputs/example_file") {
+    //     Ok(s) => println!("{}", s),
+    //     Err(e) => println!("{}", e),
+    // }
+    match propagating_errors_with_option("inputs/example_file") {
+        Some(s) => println!("{}", s),
+        None => println!("Some error occurred"),
+    }
+}
+
 fn main() {
-    update_value();
+    read_from_file();
 }
