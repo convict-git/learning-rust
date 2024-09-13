@@ -33,12 +33,16 @@ use crate::{
         strings::{add_assign, deref_coercion, indexing},
         vectors::{try_outs_1, try_outs_2},
     },
-    docs::{guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest},
+    docs::{
+        generics::test_largest, guessing_game::play, match_docs::push_down_reference,
+        packages_crates::eat_at_rest,
+    },
     errors::recoverable::{
         propagating_error_basic, propagating_errors, propagating_errors_with_option,
     },
 };
 
+/*
 pub fn read_from_file() {
     // match propagating_error_basic("inputs/example_file") {
     //     Ok(s) => println!("{}", s),
@@ -49,7 +53,8 @@ pub fn read_from_file() {
         None => println!("Some error occurred"),
     }
 }
+*/
 
 fn main() {
-    read_from_file();
+    test_largest();
 }
