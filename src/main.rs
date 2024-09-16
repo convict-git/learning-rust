@@ -34,7 +34,10 @@ use crate::{
         vectors::{try_outs_1, try_outs_2},
     },
     docs::{
-        generics::test_largest, guessing_game::play, match_docs::push_down_reference,
+        generics::test_largest,
+        guessing_game::play,
+        lifetimes::{first_word, test_lifetime_with_structs, test_longest},
+        match_docs::push_down_reference,
         packages_crates::eat_at_rest,
     },
     errors::recoverable::{
@@ -56,5 +59,5 @@ pub fn read_from_file() {
 */
 
 fn main() {
-    test_largest();
+    println!("{}", first_word(&String::from("World")));
 }
