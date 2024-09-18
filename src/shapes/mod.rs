@@ -4,3 +4,6 @@ pub mod collisions;
 pub mod common;
 pub mod rect;
 pub mod shape;
+
+// tests
+pub mod __tests__;
