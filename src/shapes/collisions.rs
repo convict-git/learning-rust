@@ -31,7 +31,7 @@ impl From<Vec<(f32, f32)>> for PointsIter {
 }
 
 pub trait Points {
-    fn points(&self) -> PointsIter;
+    fn get_points_iter(&self) -> PointsIter;
 }
 
 pub trait Contains {
@@ -45,6 +45,8 @@ where
     T: Points,
 {
     fn collide(&self, other: &T) -> bool {
-        return other.points().any(|point| self.contains_point(point));
+        return other
+            .get_points_iter()
+            .any(|point| self.contains_point(point));
     }
 }
