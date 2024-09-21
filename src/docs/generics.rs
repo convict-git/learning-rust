@@ -58,6 +58,7 @@ impl Dist for OtherPoint {
 
 impl<T> Point<T> {
     fn get_dist_from_point<U: Dist>(&self, other: &U) -> u32 {
+        // fn get_dist_from_point(&self, other: &dyn Dist) -> u32 { // alternate using dyn
         other.get_dist()
     }
 }
