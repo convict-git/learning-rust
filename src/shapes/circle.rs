@@ -42,7 +42,7 @@ impl Contains for Circle {
 }
 
 impl Points for Circle {
-    fn points(&self) -> super::collisions::PointsIter {
+    fn get_points_iter(&self) -> super::collisions::PointsIter {
         return vec![(self.x, self.y)].into();
     }
 }
