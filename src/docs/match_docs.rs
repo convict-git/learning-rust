@@ -33,6 +33,14 @@ pub fn push_down_reference() {
     // Some nice example of pattern matching and variable @ subpattern binding
     let arr = [1, 2, 3, 4];
     match arr {
-        whole @ [head, tail @ .., last] => println!("{} {:?} {:?} {}", head, tail, whole, last),
+        // NOTE: must understand the ownership here.
+        // `whole` borrows the whole slice of arr as ref
+        // `head` and `last` tried to move but instead copied (since i32)
+        // `tail` borrows the partial slice of arr as ref (since .. operator results in borrow)
+        whole @ [head, tail @ .., last] => {
+            println!("{} {:?} {:?} {}", head, tail, whole, last)
+        }
     };
 }
+
+// Refer: https://doc.rust-lang.org/reference/expressions/match-expr.html for grammar
