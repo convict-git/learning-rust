@@ -2,9 +2,11 @@ use std::collections::HashMap;
 
 pub fn basics() {
     let mut h_map: HashMap<String, i32> = HashMap::new();
+    let mut h_map_2: HashMap<&str, i32> = HashMap::new();
     h_map.insert("convict".to_string(), 26);
     h_map.insert("wildcat".to_string(), 20);
 
+    let s = "Hello";
     let v = h_map.remove(&"Hello".to_string()).unwrap_or(-1);
     println!("{v}");
 
