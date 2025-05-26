@@ -32,9 +32,13 @@ use crate::{
         strings::{add_assign, deref_coercion, indexing},
         vectors::{try_outs_1, try_outs_2},
     },
-    docs::{guessing_game::play, match_docs::push_down_reference, packages_crates::eat_at_rest},
+    docs::{
+        closures::check, guessing_game::play, match_docs::push_down_reference,
+        packages_crates::eat_at_rest,
+    },
 };
 
 fn main() {
-    update_value();
+    // update_value();
+    check();
 }
