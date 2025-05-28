@@ -29,7 +29,7 @@ impl<T> MyOption<T> {
     }
 }
 
-pub fn check() {
+pub fn check_a() {
     let mut list = vec![1, 2, 3];
 
     let mut fn_borrows_mutably = || list.push(4);
@@ -101,4 +101,42 @@ pub fn check() {
 
     let s = String::from("hello world");
     let _s_clone = make_cloner(&s)(); // [just reminding]: automatic deref from &String to &str
+}
+
+pub fn check_b() {
+    // Iterator trait and the next method -- revisit to iterators
+    /*
+    trait Iterator {
+        type Item; // associated type with the trait
+        fn next(&mut self) -> Option<Self::Item>; // why &mut self? the struct for which you define the
+                                                  // trait Iterator for, is responsible for handling
+                                                  // the state of the iterator as well, eg. current
+                                                  // index in a vector iterator.
+                                                  // So on next, you will be changing some fields in
+                                                  // the struct to maintain the state
+    }
+    */
+    //
+    /* In vec, we have
+     * - iter() -> for immutable references to the items,
+     * - into_iter() -> for owned values,
+     * - iter_mut() -> for mutable reference to the items
+     *
+     * Various methods for iterators:
+     * - consuming iterators, eg sum
+     * - iterator adaptors, eg map
+     */
+    let v = vec![1, 2, 3];
+    let v_iter = v.iter();
+
+    let v_inc_iter = v_iter.map(|x| x + 1);
+    // NOTE: Iterators are lazy. Nothing happens here since iterator isn't consumed yet.
+    // Hence, iterator adaptors don't do anything unless a iterator consumer is used, like collect.
+
+    // to consume the iterator, let's collect
+    let v_inc = v_inc_iter.collect::<Vec<i32>>();
+    println!("{v_inc:?}");
+
+    // NOTE: Now you know about closures and the various ways they capture the values from the
+    // environment, you should be mindful about passing the closures to these iterator methods
 }
