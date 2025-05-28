@@ -68,4 +68,37 @@ pub fn check() {
 
     // println!("{list:?}"); // This will break, since list was forcefully moved, and ownership was
     // transfered to a different thread. And the list was dropped when the thread ended.
+
+    let mut list2 = vec![1, 2, 3];
+    let mut sort_operations: Vec<String> = Vec::new();
+    let v = String::from("Hello world");
+    let my_closure = |x: &i32, y: &i32| {
+        // sort_operations.push(v); // ERROR
+        /* This will turn the function to FnOnce since v is moved (String hence no copy trait).
+         * sort_by expects the closure to implement FnMut or Fn since it might be called multiple times
+         *
+         * One way to fix it is by v.clone()
+         * */
+        if x < y {
+            std::cmp::Ordering::Less
+        } else {
+            std::cmp::Ordering::Greater
+        }
+    };
+
+    list2.sort_by(my_closure);
+
+    /* When designing a function that accepts/returns a closure, think of lifetimes as well!
+     * We don't want the value usage to outlive the value itself (use-after-free).
+     * Also, specifying lifetimes will generally lead to better error messages than rust doing it itself */
+
+    // NOTE: Try out what happens if you don't specify the lifetimes in the below mentioned case.
+    // How will the lifetime elision work here?
+    // What will be the inferred lifetimes by the rust compiler? What issues will it cause?
+    fn make_cloner<'a>(s_ref: &'a str) -> impl Fn() -> String + 'a {
+        || s_ref.to_string()
+    }
+
+    let s = String::from("hello world");
+    let _s_clone = make_cloner(&s)(); // [just reminding]: automatic deref from &String to &str
 }
