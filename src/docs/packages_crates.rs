@@ -63,3 +63,9 @@ use std::io::{self, Write};
 // include all :
 use std::collections::*;
  */
+
+/*
+ * Release profiles: predefined and customizable profiles for different build configurations
+ * Workspace: set of packages that share the same Cargo.lock and output dir (better to refer the
+ * docs when in doubt)
+ */
