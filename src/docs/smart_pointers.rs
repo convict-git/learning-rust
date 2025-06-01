@@ -1,4 +1,4 @@
-// Smart pointers
+// == Smart pointers ==
 /* Rust already has & (references, borrows the value they point to)
  * Smart pointers have additional metadata and functionalities over & and pointers
  * - references just borrow values, smart pointers in most cases owns the value they point to.
@@ -21,4 +21,14 @@ pub fn check() {
     // after b's scope end, both the the pointer (on the stack) and the value (on the heap) are dropped
 
     println!("{:?}", *b);
+
+    let mut n = 5;
+    let x = &mut n;
+    {
+        let b2 = Box::new(x); // b2 is on stack, value of x is moved.
+                              // b2 is dropped, the value of x, i.e. moved mutable reference to n on heap is also dropped
+    }
+    println!("{}", n); // This still works
+
+    // println!("{}", x); // Error: This breaks value of x was moved out
 }
