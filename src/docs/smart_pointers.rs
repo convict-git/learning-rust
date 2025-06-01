@@ -32,3 +32,55 @@ pub fn check() {
 
     // println!("{}", x); // Error: This breaks value of x was moved out
 }
+
+struct MyBox<T>(T); // a generic tuple struct
+
+impl<T> MyBox<T> {
+    pub fn new(t: T) -> Self {
+        MyBox(t) // still haven't figured out the heap allocation part
+    }
+}
+
+use std::ops::Deref;
+impl<T> Deref for MyBox<T> {
+    type Target = T; // Associated type
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+pub fn check2() {
+    let x = 5;
+    let b = MyBox::new(x);
+    // println!("{}", b);
+    assert_eq!(5, x);
+    assert_eq!(5, *b); //
+    let _t = *(b.deref()); // similar to *b
+    let c = |x: &str| println!("{}", x);
+
+    let s = String::from("Hello");
+    let bs = MyBox::new(s);
+
+    c(&bs); // passes &MyBox<String>, but c expects &str
+            // &MyBox<String> -> &String -> &str: rust does this for us, using Deref coercion
+            // We have already provided deref for &MyBox<T> to &T
+            // Rust provides deref for &String to &str
+
+    let ss = &(*bs)[..]; // if rust didn't give deref for &String to &str
+                         // *bs (&String) // & [..] -> str slice for whole string
+    c(ss);
+
+    /*
+     * NOTE: good part is that all deref is compile time computation from rust compiler hence no runtime cost
+     *
+     * Also, deref cannot be implemented for more than one Target.
+     * Hence, rust compiler has exactly one deref path to try till it reached the desired method parameters.
+     *
+     * We can also use DerefMut for mutable dereferences, i.e. &mut self -> &mut Self::Target
+     *
+     * NOTE:
+     * &T and &mut T -> can be dereffed to &U, when T: Deref<Target=U>
+     * &mut T -> can be dereffed to &mut U, when T: DerefMut<Target=U>
+     */
+}
