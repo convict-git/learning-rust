@@ -25,8 +25,8 @@ pub fn check() {
     let mut n = 5;
     let x = &mut n;
     {
-        let b2 = Box::new(x); // b2 is on stack, value of x is moved.
-                              // b2 is dropped, the value of x, i.e. moved mutable reference to n on heap is also dropped
+        let _b2 = Box::new(x); // b2 is on stack, value of x is moved.
+                               // b2 is dropped, the value of x, i.e. moved mutable reference to n on heap is also dropped
     }
     println!("{}", n); // This still works
 
@@ -82,5 +82,50 @@ pub fn check2() {
      * NOTE:
      * &T and &mut T -> can be dereffed to &U, when T: Deref<Target=U>
      * &mut T -> can be dereffed to &mut U, when T: DerefMut<Target=U>
+     */
+}
+
+// Drop Trait -> what happens to the value when the owner dies (value goes out of the scope)
+//
+// why implement Drop trait for smart pointers?
+// customize what happens to the referenced value when the pointers goes out of the scope,
+// like in Box<T>, who will have to free-up the memory allocated on the heap
+//
+impl<T> Drop for MyBox<T> {
+    fn drop(&mut self) {
+        println!("Drop for MyBox called for MyBox");
+    }
+}
+/* Some pointers about Drop Trait:
+ * we cannot call .drop(). This is enforced since rust anyway calls the drop for the value at the end of its scope (RAII from C++),
+ * and it can cause double free error (freeing already freed memory)
+ * instead we can use std::mem::drop() for intentional drop (some use cases are freeing up locks when used, and not waiting for it to go out of scope),
+ */
+pub fn check3() {
+    let b = MyBox::<i32>::new(3);
+
+    drop(b); // moves
+
+    // drop(b); // NOTE: You cannot call drop twice! drop moves the value here since MyBox<T>
+    // doesn't implement Copy trait
+
+    /*
+     * But wait:
+     * does it make sense? A struct cannot implement both Copy and Drop trait together by design.
+     * Why? First, it's very important to understand the difference between Copy and Clone.
+     * Copy is bit-wise copy (i.e. memory is duplicated), it might look fine for primitives but
+     * think about a MyTupleStruct(Box<T>). It's copy will copy the value of Box<T> pointer bitwise.
+     * Dropping will lead to drop on the same memory ref.
+     *
+     * Hence rust doesn't allow Copy and Drop trait to be implemented simultaneously
+     */
+
+    /*
+     * Some ways to drop: (// anything that moves out the value and/or drop due to out of scope or explicit drop)
+     * let mut s = String::new();
+     *
+     * drop(s);
+     * (|_| ())(s);
+     * { s };
      */
 }
