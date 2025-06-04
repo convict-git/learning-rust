@@ -16,6 +16,8 @@
  * Box implements Deref, and Drop traits -- useful as smart pointers (ToDo: More on this later!)
  * */
 
+use std::{fmt::Display, ops::Deref, rc::Rc};
+
 pub fn check() {
     let b = Box::new(4);
     // after b's scope end, both the the pointer (on the stack) and the value (on the heap) are dropped
@@ -41,7 +43,6 @@ impl<T> MyBox<T> {
     }
 }
 
-use std::ops::Deref;
 impl<T> Deref for MyBox<T> {
     type Target = T; // Associated type
 
@@ -128,4 +129,82 @@ pub fn check3() {
      * (|_| ())(s);
      * { s };
      */
+}
+
+// == Rc<T> The Reference counted Smart Pointer ==
+// - Multiple possible owners of the same value (similar to immutable borrows)
+// - Useful when can't decide the last ownership at compile time (mostly an espace hatch for lifetimes hell)
+// - Only for single-threaded systems
+
+/* Linkedlist:
+ *
+// enum List {
+//     Cons(i32, Box<List>),
+//     Nil,
+// }
+// let nil = Box::new(List::Nil);
+// let a = Box::new(List::Cons(4, nil));
+// let b = Box::new(List::Cons(3, a));
+// let c = Box::new(List::Cons(2, a)); // breaks because a was moved
+ */
+
+pub fn check4() {
+    // So instead we can keep references here, and also have to specify lifetimes
+    enum ListRef<'a> {
+        Cons(i32, &'a Box<ListRef<'a>>),
+        Nil,
+    }
+    let nil = Box::new(ListRef::Nil);
+    let a = Box::new(ListRef::Cons(4, &nil));
+    let b = Box::new(ListRef::Cons(3, &a));
+    let c = Box::new(ListRef::Cons(2, &a));
+    let d = Box::new(ListRef::Cons(5, &c));
+    // This works fine as far as we aren't going to mutate anything (since we are borrowing immutably),
+    // Currently it looks trivial because everything in a single scope.
+    // But 'a should live long enough, and cases, where you would want to return this data-structure, pass to different threads,
+    // This won't scale very well and we will be stuck in lifetime hell.
+}
+
+// So we will use Rc<T>
+pub fn check5() {
+    enum List {
+        Cons(i32, Rc<List>),
+        Nil,
+    }
+
+    impl Display for List {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            if let List::Cons(x, next) = self {
+                write!(f, "{} -> {}", x, *next)
+            } else {
+                write!(f, "Nil")
+            }
+        }
+    }
+
+    let a = Rc::new(List::Cons(4, Rc::new(List::Nil)));
+    // clone the smart pointer of 'a' for shared reference, and pass it to 'b'
+    // NOTE: We should not do a manual a.clone() here, since Rc::clone will also handle the
+    // reference counting logic. We should follow their API to keep the invariant maintained
+    // Also, one interesting take,
+    // when figuring out perf issues, we can safely ignore Rc::clone calls, but not _.clone()
+    let b = Rc::new(List::Cons(3, Rc::clone(&a)));
+    let c = Rc::new(List::Cons(1, Rc::clone(&a)));
+
+    let print_ref_counts = || {
+        println!(
+            "a_strong_count: {}\nb_strong_count: {}\nc_strong_count: {}\n",
+            Rc::strong_count(&a),
+            Rc::strong_count(&b),
+            Rc::strong_count(&c),
+        );
+    };
+    println!("a: {}\nb: {}\nc: {}\n", a, b, c);
+
+    {
+        let _d = Rc::new(List::Cons(2, Rc::clone(&a)));
+        print_ref_counts(); // 4 1 1
+    }
+
+    print_ref_counts(); // 3 1 1 // reference count reduce since _d died
 }

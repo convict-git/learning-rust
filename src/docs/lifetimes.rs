@@ -88,6 +88,8 @@ pub fn first_word(input: &str) -> &str {
 //    - fn f<'a>(foo: &'a i32) -> &'a i32
 //  3. If multiple input lifetime params, one with self is used for all output lifetime params
 
+// ** Ref ** : https://doc.rust-lang.org/reference/lifetime-elision.html
+
 // Lifetime annotations for method definitions
 
 impl<'a> ImportantExcerpt<'a> {
