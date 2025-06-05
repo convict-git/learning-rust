@@ -4,6 +4,7 @@
  * - references just borrow values, smart pointers in most cases owns the value they point to.
  * Eg. String and Vec<_>
  *
+ * == Box ==
  * Box<T> -> lightest smart pointer, storing value of type T, keeping it in heap. only the pointer stays on
  * the stack. No performance overhead. Useful when:
  *
@@ -207,4 +208,102 @@ pub fn check5() {
     }
 
     print_ref_counts(); // 3 1 1 // reference count reduce since _d died
+}
+
+// == Interior Mutability Pattern == (allow mutation inside an immutable value)
+/* allow mutating the value, even when the value is borrowed immutably, against the rust's
+ * borrowing rules (unsafe code behind the scenes but giving safe APIs).
+ * Ensure the checker rules are manually handled by us correctly, since the borrowing rules
+ * are checked at runtime (instead of compile-time) and program will panic if rules are breached.
+ * Static Analysis of the rust compiler is conservative and more restrictive and might reject
+ * safe programs but never accept any unsafe program.
+ */
+
+/* smart pointers:
+ * // compile-time borrow checker:
+ * Box<T> (value on heap, pointer on stack, no perf overhead, data size not known at compile time,
+ * both mut/immutable borrow),
+ * Rc<T> (reference counted, like immutable borrow with multiple owners, NO interior mutability, single threaded),
+ * // run-time borrow checker:
+ * RefCell<T> (reference counted, interior mutability, single threaded, mut/immutable borrows at
+ * runtime)
+ */
+
+mod interior_mutability_example {
+    pub trait Messenger {
+        fn send(&self, msg: &str);
+    }
+
+    pub struct LimitTracker<'a, T: Messenger> {
+        messenger: &'a T,
+        value: usize,
+        max: usize,
+    }
+
+    impl<'a, T> LimitTracker<'a, T>
+    where
+        T: Messenger,
+    {
+        pub fn new(messenger: &'a T, max: usize) -> LimitTracker<'a, T> {
+            LimitTracker {
+                messenger,
+                value: 0,
+                max,
+            }
+        }
+
+        pub fn set_value(&mut self, value: usize) {
+            self.value = value;
+
+            let percentage_of_max = self.value as f64 / self.max as f64;
+
+            if percentage_of_max >= 1.0 {
+                self.messenger.send("Error: You are over your quota!");
+            } else if percentage_of_max >= 0.9 {
+                self.messenger
+                    .send("Urgent warning: You've used up over 90% of your quota!");
+            } else if percentage_of_max >= 0.75 {
+                self.messenger
+                    .send("Warning: You've used up over 75% of your quota!");
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::interior_mutability_example::{Messenger, *};
+    use std::cell::RefCell;
+
+    struct MockMessenger {
+        // sent_messages: Vec<String>,
+        sent_messages: RefCell<Vec<String>>,
+    }
+
+    impl MockMessenger {
+        fn new() -> Self {
+            MockMessenger {
+                // sent_messages: vec![],
+                sent_messages: RefCell::new(vec![]),
+            }
+        }
+    }
+
+    impl Messenger for MockMessenger {
+        fn send(&self, msg: &str) {
+            // self.sent_messages.push(String::from(msg));
+            // // since self is borrowed immutably, we can't push, hence we need interior mutability.
+            self.sent_messages.borrow_mut().push(String::from(msg));
+        }
+    }
+
+    #[test]
+    fn it_sends_an_over_75_percent_warning_message() {
+        let mock_messenger = MockMessenger::new();
+        let mut limit_tracker = LimitTracker::new(&mock_messenger, 100);
+        limit_tracker.set_value(80);
+
+        // assert_eq!(mock_messenger.sent_messages.len(), 1);
+        assert_eq!(mock_messenger.sent_messages.borrow().len(), 1);
+    }
 }
