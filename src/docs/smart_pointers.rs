@@ -17,7 +17,7 @@
  * Box implements Deref, and Drop traits -- useful as smart pointers (ToDo: More on this later!)
  * */
 
-use std::{fmt::Display, ops::Deref, rc::Rc};
+use std::{cell::RefCell, fmt::Display, ops::Deref, rc::Rc};
 
 pub fn check() {
     let b = Box::new(4);
@@ -223,10 +223,10 @@ pub fn check5() {
  * // compile-time borrow checker:
  * Box<T> (value on heap, pointer on stack, no perf overhead, data size not known at compile time,
  * both mut/immutable borrow),
- * Rc<T> (reference counted, like immutable borrow with multiple owners, NO interior mutability, single threaded),
+ * Rc<T> (reference counted, like immutable borrow but with multiple owners, NO interior mutability, single threaded),
  * // run-time borrow checker:
  * RefCell<T> (reference counted, interior mutability, single threaded, mut/immutable borrows at
- * runtime)
+ * runtime, single owner)
  */
 
 mod interior_mutability_example {
@@ -307,3 +307,91 @@ mod tests {
         assert_eq!(mock_messenger.sent_messages.borrow().len(), 1);
     }
 }
+
+// == Rc<RefCell<T>> ==, Multiple owners of mutable data
+/* Rc<T> -> provides immutable borrows with multiple owners
+ * RefCell<T> -> provides interior mutability (mutability to immutable value)
+ *
+ * so we can get multiple owners mutability access to an immutable value using Rc<RefCell<T>>
+ */
+
+pub fn check6() {
+    // Aim: List which has mutability on both values and structure
+    enum List {
+        // Cons(i32, Box<List>), // this would break when value will move out
+        // Cons(i32, Rc<List>), // This does allow multiple owners but only immutable borrows
+        Cons(i32, Rc<RefCell<List>>),
+        Nil,
+    }
+
+    impl List {
+        fn get_wrapped_nil() -> Rc<RefCell<Self>> {
+            Rc::new(RefCell::new(Self::Nil))
+        }
+
+        fn get_wrapped_list(value: i32, next: &Rc<RefCell<Self>>) -> Rc<RefCell<Self>> {
+            // value is copied, and we Rc clone the SP given through next
+            Rc::new(RefCell::new(Self::Cons(value, Rc::clone(next))))
+        }
+
+        fn update_next(&mut self, new_next: &Rc<RefCell<Self>>) -> Result<(), anyhow::Error> {
+            match self {
+                Self::Cons(_, ref_cell) => {
+                    // - clone the Rc and use it
+                    // - drop the existing Rc (otherwise memory leak) -- happens automatically RAII
+                    *ref_cell = Rc::clone(new_next);
+                    Ok(())
+                }
+                Self::Nil => Err(anyhow::anyhow!("Can't update_next on Nil instance of List")),
+            }
+        }
+
+        fn update_value(&mut self, new_value: i32) -> Result<(), anyhow::Error> {
+            match self {
+                Self::Cons(old_value, _) => {
+                    *old_value = new_value;
+                    Ok(())
+                }
+                Self::Nil => Err(anyhow::anyhow!(
+                    "Can't update_value on Nil instance of List"
+                )),
+            }
+        }
+    }
+
+    impl Drop for List {
+        fn drop(&mut self) {
+            println!(
+                "Drop called for {}",
+                if let List::Cons(value, _) = self {
+                    value.to_string()
+                } else {
+                    String::from("Nil")
+                }
+            );
+        }
+    }
+
+    let nil = List::get_wrapped_nil();
+    let a = List::get_wrapped_list(1, &nil);
+    let b = List::get_wrapped_list(2, &a);
+    let c = List::get_wrapped_list(3, &a);
+    let print_ref_counts = || {
+        println!(
+            "a_strong_count: {}\nb_strong_count: {}\nc_strong_count: {}\n",
+            Rc::strong_count(&a),
+            Rc::strong_count(&b),
+            Rc::strong_count(&c),
+        );
+    };
+    // b -> a <- c
+    // change it to b <- a <- c, i.e. b's next to nil, a's next to b
+    print_ref_counts(); // 3, 1, 1
+    (*b).borrow_mut().update_next(&nil);
+    print_ref_counts(); // 2, 1, 1
+    (*a).borrow_mut().update_next(&b);
+    print_ref_counts(); // 2, 2, 1
+    (*c).borrow_mut().update_value(3);
+}
+
+pub fn check7() {}
