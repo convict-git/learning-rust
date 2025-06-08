@@ -394,4 +394,93 @@ pub fn check6() {
     (*c).borrow_mut().update_value(3);
 }
 
-pub fn check7() {}
+pub fn check7() {
+    // Other way, RefCell<Rc<List>>
+    enum List {
+        Cons(RefCell<i32>, RefCell<Rc<List>>),
+        Nil,
+    }
+
+    impl List {
+        fn update_value(&self, next_value: i32) -> Result<(), anyhow::Error> {
+            match self {
+                Self::Cons(value, _) => {
+                    *value.borrow_mut() = next_value;
+                    Ok(())
+                }
+                Self::Nil => Err(anyhow::anyhow!(
+                    "Can't update_value on Nil instance of List"
+                )),
+            }
+        }
+
+        fn update_next(&self, new_next: &Rc<Self>) -> Result<(), anyhow::Error> {
+            match self {
+                Self::Cons(_, ref_cell) => {
+                    *ref_cell.borrow_mut() = Rc::clone(new_next);
+                    // this should drop the existing ref_cell
+                    Ok(())
+                }
+                Self::Nil => Err(anyhow::anyhow!("Can't update_next on Nil instance of List")),
+            }
+        }
+
+        fn get_wrapped_list(value: i32, next: &Rc<Self>) -> Rc<Self> {
+            Rc::new(Self::Cons(
+                RefCell::new(value),
+                RefCell::new(Rc::clone(next)),
+            ))
+        }
+
+        fn get_wrapped_nil() -> Rc<List> {
+            Rc::new(Self::Nil)
+        }
+    }
+
+    impl Drop for List {
+        fn drop(&mut self) {
+            println!(
+                "Drop called for List with value {}",
+                if let Self::Cons(value, _) = self {
+                    (*value).borrow().to_string()
+                } else {
+                    String::from("Nil")
+                }
+            );
+        }
+    }
+
+    let nil = List::get_wrapped_nil();
+
+    let a = List::get_wrapped_list(1, &nil);
+    let b = List::get_wrapped_list(2, &a);
+    let c = List::get_wrapped_list(3, &a);
+    let print_ref_counts = || {
+        println!(
+            "a_strong_count: {}\nb_strong_count: {}\nc_strong_count: {}\n",
+            Rc::strong_count(&a),
+            Rc::strong_count(&b),
+            Rc::strong_count(&c),
+        );
+    };
+    // b -> a <- c
+    // change it to b <- a <- c, i.e. b's next to nil, a's next to b
+    print_ref_counts(); // 3 1 1
+    (*b).update_next(&nil);
+    print_ref_counts(); // 2 1 1
+    (*a).update_next(&b);
+    print_ref_counts(); // 2 2 1
+    (*c).update_value(4);
+    print_ref_counts(); // 2 2 1
+}
+
+// Creating ref cycles: Generally due nested use of interior mutability and reference counters
+//
+// == Preventing ref cycles using weak references (Weak<T>) ==
+// Rc::clone : share ownership using strong references
+// (strong_count needs to be 0 for drop)
+// Rc::downgrade(&self) -> Weak<T> : doesn't express an ownership using weak references
+// (weak_count, doesn't need to be 0 for drop)
+// but ofcourse, that means we need to check manually if value through weak reference is NOT
+// dropped. This can be done using rc::Weak::upgrade(&self<T>) -> Option<Rc<T>>
+pub fn check8() {}
