@@ -34,11 +34,10 @@ use crate::{
     },
     docs::{
         closures::check_b, guessing_game::play, match_docs::push_down_reference,
-        packages_crates::eat_at_rest, smart_pointers::check7,
+        packages_crates::eat_at_rest,
     },
 };
 
 fn main() {
     // update_value();
-    check7();
 }
