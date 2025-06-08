@@ -546,14 +546,153 @@ mod tests {
     }
 
     mod weak_pointers {
+        use std::{
+            cell::RefCell,
+            rc::{Rc, Weak},
+        };
+
         // Creating ref cycles: Generally due nested use of interior mutability and reference counters
         //
         // == Preventing ref cycles using weak references (Weak<T>) ==
         // Rc::clone : share ownership using strong references
         // (strong_count needs to be 0 for drop)
+        //
         // Rc::downgrade(&self) -> Weak<T> : doesn't express an ownership using weak references
         // (weak_count, doesn't need to be 0 for drop)
+        //
         // but ofcourse, that means we need to check manually if value through weak reference is NOT
         // dropped. This can be done using rc::Weak::upgrade(&self<T>) -> Option<Rc<T>>
+
+        enum Parent<T> {
+            Yes(T),
+            No,
+        }
+
+        struct TreeNode<T> {
+            pub value: RefCell<T>,
+            /* node -> children should be strong reference, should reduce strong count of children if parent node drops */
+            pub children: RefCell<Vec<Rc<TreeNode<T>>>>,
+            /* node -> parent, should be a weak reference, even if node is dropped,
+             * parent's strong count shouldn't change, instead just the weak count should */
+            pub parent: RefCell<Parent<Weak<TreeNode<T>>>>,
+        }
+
+        impl<T> TreeNode<T> {
+            pub fn new(value: T) -> Self {
+                Self {
+                    value: RefCell::new(value),
+                    children: RefCell::new(vec![]),
+                    parent: RefCell::new(Parent::No),
+                }
+            }
+
+            fn add_child(&self, child: &Rc<TreeNode<T>>) {
+                (*self.children.borrow_mut()).push(Rc::clone(child));
+            }
+
+            fn add_parent(&self, parent: &Rc<TreeNode<T>>) {
+                *self.parent.borrow_mut() = Parent::Yes(Rc::downgrade(parent));
+            }
+
+            fn change_value(&self, value: T) {
+                *self.value.borrow_mut() = value;
+            }
+
+            pub fn join(parent: &Rc<TreeNode<T>>, child: &Rc<TreeNode<T>>) {
+                (*parent).add_child(child);
+                (*child).add_parent(parent);
+            }
+        }
+
+        impl<T: Copy> TreeNode<T> {
+            pub fn get_values_till_root(&self) -> Vec<T> {
+                let mut v = vec![*self.value.borrow()];
+
+                if let Parent::Yes(ref p) = *self.parent.borrow() {
+                    if let Some(rc_p) = &p.upgrade() {
+                        v.append(&mut rc_p.get_values_till_root().clone());
+                    }
+                }
+                v
+            }
+        }
+
+        #[test]
+        fn test_strong_and_weak_counters() {
+            let vertices_rc = (1..=6)
+                .map(|value| Rc::new(TreeNode::new(value)))
+                .collect::<Vec<_>>();
+
+            let edges = [(1, 2), (1, 5), (2, 3), (2, 4), (5, 6)];
+
+            edges.iter().for_each(|(u, v)| -> () {
+                match vertices_rc.get(u - 1) {
+                    Some(rc_u) => match vertices_rc.get(v - 1) {
+                        Some(rc_v) => {
+                            TreeNode::join(rc_u, rc_v);
+                        }
+                        None => todo!(),
+                    },
+                    None => todo!(),
+                }
+            });
+
+            let get_strong_and_weak_counts = || {
+                vertices_rc
+                    .iter()
+                    .map(|rc_u| (Rc::strong_count(rc_u), Rc::weak_count(rc_u)))
+                    .collect::<Vec<(usize, usize)>>()
+            };
+
+            assert_eq!(
+                get_strong_and_weak_counts(),
+                vec![(1, 2), (2, 2), (2, 0), (2, 0), (2, 1), (2, 0)]
+            );
+
+            {
+                let rc_7 = Rc::new(TreeNode::new(7));
+                match vertices_rc.get(5) {
+                    Some(rc_6) => {
+                        TreeNode::join(rc_6, &rc_7);
+                    }
+                    None => todo!(),
+                }
+                assert_eq!(rc_7.get_values_till_root(), vec![7, 6, 5, 1]);
+            }
+            assert_eq!(
+                get_strong_and_weak_counts(),
+                vec![(1, 2), (2, 2), (2, 0), (2, 0), (2, 1), (2, 1)]
+            );
+        }
+
+        #[test]
+        fn test_parent_dropped() {
+            let leaf = Rc::new(TreeNode::new(2));
+            {
+                let root = Rc::new(TreeNode::new(1));
+                leaf.add_parent(&root);
+                root.add_child(&leaf);
+
+                assert_eq!(Rc::weak_count(&root), 1);
+                assert_eq!(Rc::strong_count(&root), 1);
+
+                assert_eq!(Rc::strong_count(&leaf), 2);
+                assert_eq!(Rc::weak_count(&leaf), 0);
+                // node dropped here
+            }
+
+            assert_eq!(Rc::strong_count(&leaf), 1);
+            assert_eq!(Rc::weak_count(&leaf), 0);
+            assert_eq!(
+                if let Parent::Yes(ref p) = *leaf.parent.borrow() {
+                    p.upgrade().is_none()
+                } else {
+                    false
+                },
+                true
+            );
+            // since node was dropped, weak pointer leads to None.
+            // NOTE: This doesn't lead to Parent::No (obviously!)
+        }
     }
 }
