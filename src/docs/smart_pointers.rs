@@ -515,6 +515,34 @@ mod tests {
                 *self.value.borrow_mut() = value;
             }
         }
+
+        #[test]
+        fn tree_nodes_have_right_strong_counts() {
+            let vertices_rc = (1..=6)
+                .map(|value| Rc::new(TreeNode::new(value)))
+                .collect::<Vec<_>>();
+
+            let edges = [(1, 2), (1, 5), (2, 3), (2, 4), (5, 6)];
+
+            edges.iter().for_each(|(u, v)| -> () {
+                match vertices_rc.get(u - 1) {
+                    Some(rc_u) => match vertices_rc.get(v - 1) {
+                        Some(rc_v) => {
+                            rc_u.add_child(rc_v);
+                        }
+                        None => todo!(),
+                    },
+                    None => todo!(),
+                }
+            });
+
+            let strong_counts = vertices_rc
+                .iter()
+                .map(|rc_u| Rc::strong_count(rc_u))
+                .collect::<Vec<usize>>();
+
+            assert_eq!(strong_counts, vec![1, 2, 2, 2, 2, 2]);
+        }
     }
 
     mod weak_pointers {
