@@ -1,4 +1,5 @@
 pub mod closures;
+pub mod concurrency;
 pub mod guessing_game;
 pub mod lifetimes;
 pub mod match_docs;
