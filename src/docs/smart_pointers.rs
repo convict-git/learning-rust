@@ -561,7 +561,33 @@ mod tests {
         // (weak_count, doesn't need to be 0 for drop)
         //
         // but ofcourse, that means we need to check manually if value through weak reference is NOT
-        // dropped. This can be done using rc::Weak::upgrade(&self<T>) -> Option<Rc<T>>
+        // dropped. This can be done using rc::Weak::upgrade(&self<T>) -> Option<Rc<T>>.
+        // If we are successful in upgrading the weak reference to a strong reference, strong count
+        // also increases.
+        //
+        // NOTE: MUST see the below test: test_fundamentals for better understand
+        #[test]
+        fn test_fundamentals() {
+            let r1 = Rc::new(0); // reference counted allocation for 0 on heap
+            let r4 = {
+                let r2 = Rc::clone(&r1); // r2 is clone, points to the same
+                                         // underlying allocation as r1 does, but strongly referenced
+
+                Rc::downgrade(&r2) /* returned value is a weak reference of the
+                                    * allocation pointed by r2 (i.e. same as pointed by r1) */
+            }; // r2 is dropped, hence reducing the strong count by 1
+
+            assert_eq!([Rc::strong_count(&r1), Rc::weak_count(&r1)], [1, 1]);
+
+            let r5 = Rc::clone(&r1); // r5 strong references the allocation pointed by r1
+
+            assert_eq!([Rc::strong_count(&r1), Rc::weak_count(&r1)], [2, 1]);
+
+            let r6 = r4.upgrade(); /* r6 tries to upgrade the weak reference r4 to Rc
+                                    * and is successful since strong_count != 0, hence
+                                    * increasing the strong count by 1 // Some(rc: Rc<T>) = r4.upgrade() */
+            assert_eq!([Rc::strong_count(&r1), Rc::weak_count(&r1)], [3, 1]);
+        }
 
         enum Parent<T> {
             Yes(T),
