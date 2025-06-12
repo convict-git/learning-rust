@@ -180,4 +180,83 @@ mod concurrency {
             assert_eq!(received_msg_from_server, vec![1, 3]);
         }
     }
+
+    mod shared_state_concurrency {
+        use std::{
+            sync::{Arc, Mutex},
+            thread,
+        };
+
+        struct X(i32);
+
+        // In channels, after the message passing, ownership is given away to the receiver
+        // but we might need to consume the same data with multiple consumers at the same time
+        #[test]
+        fn mutexes_basics() {
+            // Mutual exclusion -- uses lock system
+            // Mutex::new() -> Mutex<T> -> .lock() -> Result<MutexGuard<'_, T>> -
+            let m = Mutex::<X>::new(X(2));
+            {
+                let m_result = m.lock();
+                match m_result {
+                    Ok(mut m_guard) => {
+                        *m_guard = X(3);
+                        // NOTE: immutable m, provides interior mutability. Basically RefCell but threadsafe
+                    }
+                    Err(_) => todo!(),
+                }
+            }
+        }
+
+        #[test]
+        fn sharing_mutex_between_multiple_threads() {
+            /* // This example breaks because we are trying to move counter to FnMut and is needed
+               // by multiple such FnMut closures (for multiple threads)
+               // Historically, we have solved this using Reference Counted smart pointer (Rc), where
+               // we can have multiple immutable borrowers.
+               // But for thread-safety, we use Arc (Atomic Reference Count smart pointer) instead of Rc.
+
+            let counter = Mutex::<i32>::new(0);
+
+            (0..10)
+                .map(|_| {
+                    thread::spawn(move || {
+                        let mut counter_mutex_guard = counter // can't move counter here, used in FnOnce
+                            .lock()
+                            .expect("Failed to acquired lock on counter mutex");
+                        *counter_mutex_guard += 1;
+                    })
+                })
+                .for_each(|handler| {
+                    handler.join().expect("Error joining the thread");
+                });
+
+            let counter_value = *counter.lock().expect("Error locking the counter mutex");
+            assert_eq!(counter_value, 10);
+            */
+
+            let rc_counter = Arc::new(Mutex::new(0)); // Arc<Mutex<i32>>
+
+            (0..10)
+                .map(|_| {
+                    let rc_counter_t = Arc::clone(&rc_counter);
+                    // use clone in each thread. Original rc_counter is just borrowed immutably in map's closure
+                    // (which technically allows FnMut)
+
+                    thread::spawn(move || {
+                        // And now, we can move rc_counter_t, which is moved exactly once
+                        let mut counter_mutex_guard = rc_counter_t
+                            .lock()
+                            .expect("Failed to acquired lock on counter mutex");
+                        *counter_mutex_guard += 1;
+                    })
+                })
+                .for_each(|handler| {
+                    handler.join().expect("Error joining the thread");
+                });
+
+            let counter_value = *rc_counter.lock().expect("Error locking the counter mutex");
+            assert_eq!(counter_value, 10);
+        }
+    }
 }
