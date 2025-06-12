@@ -195,6 +195,10 @@ mod concurrency {
         fn mutexes_basics() {
             // Mutual exclusion -- uses lock system
             // Mutex::new() -> Mutex<T> -> .lock() -> Result<MutexGuard<'_, T>> -
+            //
+            // The most common way to unlock the mutex is to drop the associated MutextGuard
+            // received when locking it. Other way involves explicit dropping of lock guard using
+            // // let lock_guard = m.lock().unwrap(); mem::drop(lock_guard)
             let m = Mutex::<X>::new(X(2));
             {
                 let m_result = m.lock();
@@ -204,7 +208,7 @@ mod concurrency {
                         // NOTE: immutable m, provides interior mutability. Basically RefCell but threadsafe
                     }
                     Err(_) => todo!(),
-                }
+                } // m is unlocked as soon as m_result is dropped (which is basically when m_guard is dropped)
             }
         }
 
@@ -258,5 +262,60 @@ mod concurrency {
             let counter_value = *rc_counter.lock().expect("Error locking the counter mutex");
             assert_eq!(counter_value, 10);
         }
+    }
+
+    mod send_and_sync_traits {
+        /* === Send ===
+         * Send trait: ownership of values can be transfered (move) from one thread to another
+         *
+         * (all primitives types in Rust are Send, except some smart pointers like Rc<T> (alternative Arc<T>))
+         */
+
+        /* === Sync ===
+         * Sync trait: allowing access from multiple threads (through & references)
+         *
+         * (all primitives types implement Sync, except some smart poointers like Rc<T> and RefCell<T>
+         * (alternative is Arc<T> and Mutex<T>))
+         *
+         * T is Sync, if &T implements Sync (reference can be sent safely to other threads and
+         * thus safe refering from multiple threads)
+         */
+
+        /*
+         * == Rc<T> neither Send nor Sync ==
+         *
+         * - NOT Send: increases / decreases ref count, but the count isn't behind any lock.
+         * rc1 = Rc::clone(&Rc<T>) returns another Rc, rc2, but referring the same allocation.
+         * If these two rc1, and rc2 and used in different threads (moved):
+         * -- Two threads can update the count at the same time (no atomicity).
+         * -- Two threads can try to drop at the same time, resulting in double-free.
+         *
+         * - NOT Sync:
+         * Passing references aren't safe either since &Rc<T> could be used for Rc::clone and again
+         * leading to unsafe increases/decreases of strong/weak ref counts.
+         */
+
+        /*
+         * == RefCell<T> Send (if T:Send) but NOT Sync ==
+         *
+         * - Is Send: RefCell when moved, is the sole owner responsible for performing any operation
+         * on the value, and no other RefCell can be mutating the value owned by the first RefCell.
+         * But why only if T:send? When RefCell<T> is moved, T is moved too. If T isn't Send, it
+         * isn't safe to move it across the thread.
+         *
+         * - NOT Sync: because &RefCell<T>, can perform mutable borrowing in different threads
+         */
+
+        /*
+         * == Mutex<T> Send (if T: Send) and Sync ==
+         *
+         * - Is Send: Similar to RefCell<T>
+         *
+         * - Is Sync: can be dereffed only through lock system
+         *
+         * but == MutexGuard<T> == NOT Send, NOT Sync
+         *
+         * - NOT Send: MutexGuard acquired lock on a Mutex in a particular thread, moving it
+         */
     }
 }
