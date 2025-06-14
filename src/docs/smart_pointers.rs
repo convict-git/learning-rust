@@ -721,4 +721,43 @@ mod tests {
             // NOTE: This doesn't lead to Parent::No (obviously!)
         }
     }
+
+    mod other_smart_pointers {
+        mod cell {
+            // == Cell<T: Copy> == same family of RefCell,
+            /* - Copy based interior mutability. You never get reference to the inner value:
+             * --- get() -> T, T impl Copy, get returns copy of value
+             * --- set(T), overwrites the old value
+             * --- replace(T), overwrite the old value with new and returns the Copy of old value
+             * --- take()
+             *
+             * - NEITHER Send NOR Sync - thread-unsafe
+             * - Zero-runtime borrow checking (unlike RefCell)
+             */
+
+            use std::cell::Cell;
+
+            #[test]
+            fn basic_cell_usage() {
+                struct X {
+                    item: Cell<Option<i32>>,
+                }
+
+                let x = X {
+                    // immutable ownership
+                    item: Cell::new(Option::Some(4)),
+                };
+
+                let opt = x.item.get(); // copy of value inside x.item
+                x.item.set(Option::None);
+
+                assert_eq!(opt, Option::Some(4)); // Old value returned as Copy stays the same
+                assert_eq!(x.item.get(), Option::None); // new value is written (copy of that value is checked in assert_eq)
+            }
+        }
+
+        mod cow {}
+
+        mod unsafe_cell {}
+    }
 }
