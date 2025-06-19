@@ -756,7 +756,50 @@ mod tests {
             }
         }
 
-        mod cow {}
+        mod cow {
+            use std::borrow::Cow;
+
+            // == Cow<T> == Clone On Write
+            /*
+             * pub enum Cow<'a, B: ?Sized + 'a> where B: ToOwned {
+             *      Borrowed(&'a B),
+             *      Owned(<B as ToOwned>::Owned),
+             * }
+             *
+             * - Borrowed(&'a B) -> Borrowed reference of B, which is cheap to copy and store
+             * (bitwise copy of the pointer i.e. the memory address)
+             *
+             * - Owned(<B as ToOwned>::Owned) -> Clone of B is heap allocated
+             *
+             * How it helps? Assume you have a function whose return type is Cow<T>.
+             * The consumer, can know (transparently) whether you returned a borrowed value of the
+             * input or owned value of the input. It makes the consumption more explicit.
+             */
+
+            /* // NOTE: ?Sized (trait bound), means B can be Sized or NOT, that is Size of B can be known at compile time or NOT.
+             *
+             * Why is this needed? By default, rust assumes all generic types to be Sized.
+             * But if your functions support unsized types as well,
+             * then you must explicitly opt out of the default by T: ?Sized
+             *
+             * Known size at compile time helps in
+             * -- placing them on stack,
+             * -- allocating space,
+             * -- knowing how to pass them by value (stack of other fn call)
+             */
+
+            /* // NOTE: Why is ToOwned needed?
+             *
+             * For all ?Sized Bs, we need ToOwned to be implemented (call .to_owned()) for cloning
+             *
+             * B can be ?Sized, like str, [T], dyn Trait, Path..
+             * and the Owned type for them are String, Vec<T>, Box<dyn Trait>, PathBuf resp...
+             */
+            #[test]
+            fn basic_cow() {
+                // let x = Cow::new();
+            }
+        }
 
         mod unsafe_cell {}
     }
