@@ -61,7 +61,7 @@ mod helpers {
         Response(reqwest::get(url).await.unwrap())
     }
 
-    pub fn run<F: std::future::Future>(future: F) -> F::Output {
+    pub fn tokio_rt_block_on<F: std::future::Future>(future: F) -> F::Output {
         // a new tokio runtime is created everytime `run` is called
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(future)
@@ -114,22 +114,26 @@ mod async_docs {
     // NOTE: Technically reqwest should be mocked but for now we are doing real HTTP requests in these tests
 
     use super::*;
-    use futures::future::Either;
+    use futures::{future::Either, join};
     use rand::Rng;
     use std::{sync::Arc, time::Duration};
-    use tokio::{sync::Mutex, task::spawn as spawn_task, time::sleep as async_sleep};
+    use tokio::{
+        sync::{mpsc::unbounded_channel, Mutex},
+        task::spawn as spawn_task,
+        time::sleep as async_sleep,
+    };
 
     #[test]
     fn basic_async() {
         assert_eq!(
-            helpers::run(async { page_title("https://google.com").await }),
+            helpers::tokio_rt_block_on(async { page_title("https://google.com").await }),
             Option::Some(String::from("Google"))
         );
     }
 
     #[test]
     fn race_in_async() {
-        match helpers::run(async {
+        match helpers::tokio_rt_block_on(async {
             helpers::race(
                 page_title("https://google.com"),
                 page_title("https://facebook.com"),
@@ -148,7 +152,7 @@ mod async_docs {
         // Why are we using Arc<Mutex<T>>, Arc because we need counted reference smart pointer that
         // allows us multiple borrows. Mutex because we need interior mutability with locking.
         let items_counted_mutex = Arc::new(Mutex::new(vec![]));
-        helpers::run(async {
+        helpers::tokio_rt_block_on(async {
             let items_counted_mutex_clone = Arc::clone(&items_counted_mutex);
             let task_join_handle = spawn_task(async move {
                 for i in 0..=5 {
@@ -182,5 +186,42 @@ mod async_docs {
             items_ref.sort();
             assert_eq!(*items_ref, (0..10).collect::<Vec<_>>());
         }
+    }
+
+    #[test]
+    fn concurrency_with_fairness_using_join_and_channels_for_message_passing() {
+        let (sender_1, mut receiver) = unbounded_channel::<i32>();
+        let sender_2 = sender_1.clone();
+        let mut data: Vec<i32> = vec![];
+
+        helpers::tokio_rt_block_on(async {
+            // async move to ensure senders are moved and dropped once the async block is completed
+            let tx_fut1 = async move {
+                for i in 0..=5 {
+                    sender_1.send(i).unwrap();
+                    async_sleep(Duration::from_millis(200)).await;
+                }
+            };
+
+            let tx_fut2 = async move {
+                for i in 6..10 {
+                    sender_2.send(i).unwrap();
+                    async_sleep(Duration::from_millis(200)).await; // fairness can't be achieved using join if this was 100ms
+                }
+            };
+
+            let rx_fut = async {
+                // NOTE: We don't have an iterator for async series of items
+                while let Some(msg) = receiver.recv().await {
+                    data.push(msg);
+                    // This while loop will break both the sender_1 and sender_2 are dropped
+                }
+            };
+
+            // Using join will ensure fairness (using join! macro instead of join, join3, join4... fns )
+            join!(tx_fut1, tx_fut2, rx_fut);
+        });
+
+        assert_eq!(data, vec![0, 6, 1, 7, 2, 8, 3, 9, 4, 5]); // NOTE: This could be still a flaky test
     }
 }
