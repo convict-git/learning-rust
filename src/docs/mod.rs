@@ -1,3 +1,4 @@
+pub mod async_docs;
 pub mod closures;
 pub mod concurrency;
 pub mod guessing_game;
