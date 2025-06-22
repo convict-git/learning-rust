@@ -76,6 +76,7 @@ mod helpers {
     {
         let f1 = pin!(f1);
         let f2 = pin!(f2);
+        // NOTE: select is from futures::future and NOT std::future
         match future::select(f1, f2).await {
             Either::Left((a, _f2)) => Either::Left(a),
             Either::Right((b, _f1)) => Either::Right(b),
@@ -112,9 +113,11 @@ fn page_title(url: &str) -> impl Future<Output = Option<String>> {
 mod async_docs {
     // NOTE: Technically reqwest should be mocked but for now we are doing real HTTP requests in these tests
 
-    use futures::future::Either;
-
     use super::*;
+    use futures::future::Either;
+    use rand::Rng;
+    use std::{sync::Arc, time::Duration};
+    use tokio::{sync::Mutex, task::spawn as spawn_task, time::sleep as async_sleep};
 
     #[test]
     fn basic_async() {
@@ -136,6 +139,48 @@ mod async_docs {
             Either::Left(Some(t)) => assert_eq!(t, "Google"),
             Either::Right(Some(t)) => assert_eq!(t, "Facebook"),
             _ => panic!("Some error occured!"),
+        }
+    }
+
+    #[test]
+    fn concurrency_with_async() {
+        // NOTE: here we are using Arc from std::sync::Arc, and Mutex from tokio::sync::Mutex (instead of std)
+        // Why are we using Arc<Mutex<T>>, Arc because we need counted reference smart pointer that
+        // allows us multiple borrows. Mutex because we need interior mutability with locking.
+        let items_counted_mutex = Arc::new(Mutex::new(vec![]));
+        helpers::run(async {
+            let items_counted_mutex_clone = Arc::clone(&items_counted_mutex);
+            let task_join_handle = spawn_task(async move {
+                for i in 0..=5 {
+                    let random_delay = rand::thread_rng().gen_range(1..=200);
+                    {
+                        let mut item_mutex_guard = items_counted_mutex_clone.try_lock().unwrap();
+                        item_mutex_guard.push(i);
+                        // free the lock before await itself
+                    }
+                    async_sleep(Duration::from_millis(random_delay)).await; // tokio::time::sleep async anologous of std::thread::sleep
+                }
+            });
+
+            {
+                let items_counted_mutex_clone = Arc::clone(&items_counted_mutex);
+                let mut item_mutex_guard = items_counted_mutex_clone.try_lock().unwrap();
+                for i in 6..10 {
+                    item_mutex_guard.push(i);
+                }
+            }
+
+            task_join_handle.await.unwrap();
+            // We need to await the spawned task to ensure the current future completion
+            // means all internally created futures are completed too
+        });
+
+        // since helpers::run is blocking (since it uses tokio::runtime::block_on), we can
+        // assert_eq here safely
+        {
+            let mut items_ref = items_counted_mutex.try_lock().unwrap();
+            items_ref.sort();
+            assert_eq!(*items_ref, (0..10).collect::<Vec<_>>());
         }
     }
 }
