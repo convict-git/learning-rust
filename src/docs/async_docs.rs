@@ -8,6 +8,12 @@
  * - Future is lazy, just like iterators, they won't do anything unless awaited
  *   (much different than JS where the promises are eager)
  * - await keyword is at the end which helps in chaining (coming from JS we know the pain)
+ *
+ * == NOTE on starvating ==
+ * - Rust gives runtimes a chance to pause a task, and shift to another task if the current future it
+ *   is awaiting on isn't completed yet. Reverse implication is true as well; i.e. it can only pause
+ *   at await checkpoints (anything between two await runs synchronously).
+ *   This can lead to a future starving other futures.
 */
 
 // == External crates used: ==
@@ -114,9 +120,17 @@ mod async_docs {
     // NOTE: Technically reqwest should be mocked but for now we are doing real HTTP requests in these tests
 
     use super::*;
-    use futures::{future::Either, join};
+    use futures::{
+        future::{join_all as join_all_futures, Either},
+        join,
+    };
     use rand::Rng;
-    use std::{sync::Arc, time::Duration};
+    use std::{
+        future::Future,
+        pin::{pin, Pin},
+        sync::Arc,
+        time::Duration,
+    };
     use tokio::{
         sync::{mpsc::unbounded_channel, Mutex},
         task::spawn as spawn_task,
@@ -196,30 +210,44 @@ mod async_docs {
 
         helpers::tokio_rt_block_on(async {
             // async move to ensure senders are moved and dropped once the async block is completed
-            let tx_fut1 = async move {
+            let tx_fut1 = pin!(async move {
                 for i in 0..=5 {
                     sender_1.send(i).unwrap();
                     async_sleep(Duration::from_millis(200)).await;
                 }
-            };
+            });
 
-            let tx_fut2 = async move {
+            let tx_fut2 = pin!(async move {
                 for i in 6..10 {
                     sender_2.send(i).unwrap();
                     async_sleep(Duration::from_millis(200)).await; // fairness can't be achieved using join if this was 100ms
                 }
-            };
+            });
 
-            let rx_fut = async {
+            let rx_fut = pin!(async {
                 // NOTE: We don't have an iterator for async series of items
                 while let Some(msg) = receiver.recv().await {
                     data.push(msg);
                     // This while loop will break both the sender_1 and sender_2 are dropped
                 }
-            };
+            });
 
             // Using join will ensure fairness (using join! macro instead of join, join3, join4... fns )
-            join!(tx_fut1, tx_fut2, rx_fut);
+            // join!(tx_fut1, tx_fut2, rx_fut);
+            // NOTE: We can use the join! macro or join, join2, join3... only when the number of
+            // futures are known at compile time. But there can be cases, when we need to work on
+            // collection of futures
+
+            // let futures = vec![tx_fut1, tx_fut2, rx_fut]; // ERROR: This breaks because all the
+            // async blocks, even if they return the same type, Future<Result=()>, aren't identical
+            // The compiler suggests to pin these. Todo: Read more on this later.
+            // Also, since we are using dyn Future, we need to Box it since the Size is not known
+            // at compile time. But we really don't need heap allocations here, just references to
+            // pinned memory in the stack will work as well!
+
+            let futures: Vec<Pin<&mut dyn Future<Output = ()>>> = vec![tx_fut1, tx_fut2, rx_fut];
+            join_all_futures(futures).await; // here the collection must implement Iterator and
+                                             // Item must be a Future
         });
 
         assert_eq!(data, vec![0, 6, 1, 7, 2, 8, 3, 9, 4, 5]); // NOTE: This could be still a flaky test
