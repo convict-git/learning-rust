@@ -59,7 +59,9 @@ impl Html {
 
 mod helpers {
     use futures::future::{self, Either};
-    use std::{future::Future, pin::pin};
+    use rand::Rng;
+    use std::{future::Future, pin::pin, time::Duration};
+    use tokio::time::{sleep as async_sleep, Sleep};
 
     use super::*;
 
@@ -71,6 +73,11 @@ mod helpers {
         // a new tokio runtime is created everytime `run` is called
         let rt = tokio::runtime::Runtime::new().unwrap();
         rt.block_on(future)
+    }
+
+    pub async fn async_random_sleep(max_time: u64) {
+        let random_delay = rand::thread_rng().gen_range(1..=max_time);
+        async_sleep(Duration::from_millis(random_delay)).await; // tokio::time::sleep async anologous of std::thread::sleep
     }
 
     // ToDo : understand later the need for pinning the future. It has to do with not allowing to
@@ -122,7 +129,7 @@ mod async_docs {
     use super::*;
     use futures::{
         future::{join_all as join_all_futures, Either},
-        join,
+        join, Stream,
     };
     use rand::Rng;
     use std::{
@@ -137,6 +144,7 @@ mod async_docs {
         task::{spawn as spawn_task, yield_now as async_yield_now},
         time::sleep as async_sleep,
     };
+    use tokio_stream::{iter as stream_from_iter, wrappers::UnboundedReceiverStream, StreamExt};
 
     #[test]
     fn basic_async() {
@@ -171,13 +179,12 @@ mod async_docs {
             let items_counted_mutex_clone = Arc::clone(&items_counted_mutex);
             let task_join_handle = spawn_task(async move {
                 for i in 0..=5 {
-                    let random_delay = rand::thread_rng().gen_range(1..=200);
                     {
                         let mut item_mutex_guard = items_counted_mutex_clone.try_lock().unwrap();
                         item_mutex_guard.push(i);
                         // free the lock before await itself
                     }
-                    async_sleep(Duration::from_millis(random_delay)).await; // tokio::time::sleep async anologous of std::thread::sleep
+                    helpers::async_random_sleep(200).await;
                 }
             });
 
@@ -350,8 +357,7 @@ mod async_docs {
         }
 
         let get_a_random_slow_future = || async {
-            let random_delay = rand::thread_rng().gen_range(1..=200);
-            async_sleep(Duration::from_millis(random_delay)).await;
+            helpers::async_random_sleep(200).await;
             42
         };
 
@@ -364,5 +370,120 @@ mod async_docs {
                     .is_ok()
             );
         });
+    }
+
+    #[test]
+    fn streams_basics() {
+        // == Streams == async form of iterators
+        // Also, we can convert any iterator to stream
+
+        assert_eq!(
+            helpers::tokio_rt_block_on(async {
+                let (tx, mut rx) = unbounded_channel::<i32>();
+
+                let client_fut = async move {
+                    let v_iter = vec![1, 2, 3].into_iter();
+                    let mut stream_from_v_iter = stream_from_iter(v_iter);
+                    // stream_from_v_iter implements tokio_stream::StreamExt trait
+                    // (Ext is popularly used for extension for some trait),
+                    // so unless we import tokio_stream::StreamExt, we can't use .next()
+                    // [traits needs to be imported for their methods to be used]
+
+                    while let Some(x) = stream_from_v_iter.next().await {
+                        tx.send(x).unwrap(); // without await
+                    }
+                };
+                let server_fut = async {
+                    let mut msgs = vec![];
+                    while let Some(x) = rx.recv().await {
+                        msgs.push(x * x);
+                    }
+                    msgs
+                };
+
+                let (_, msgs) = join!(client_fut, server_fut);
+                msgs
+            }),
+            vec![1, 4, 9]
+        );
+    }
+
+    #[test]
+    fn composing_and_merging_streams() {
+        #[derive(Debug)]
+        enum StreamResponse<T> {
+            Result(T),
+            Interval(i32),
+        }
+        // Creating a get_messages "sync" function which returns a stream from an async task
+        fn get_messages() -> impl Stream<Item = StreamResponse<i32>> {
+            let (tx, rx) = unbounded_channel::<StreamResponse<i32>>();
+
+            spawn_task(async move {
+                let msgs = 0..10;
+                for msg in msgs {
+                    helpers::async_random_sleep(200).await;
+                    tx.send(StreamResponse::Result(msg)).unwrap();
+                }
+            });
+
+            UnboundedReceiverStream::new(rx)
+        }
+
+        // A never ending infinite stream
+        fn get_intervals() -> impl Stream<Item = i32> {
+            let (tx, rx) = unbounded_channel::<i32>();
+            spawn_task(async move {
+                let mut count = 0;
+                loop {
+                    helpers::async_random_sleep(5).await;
+                    if let Err(err_msg) = tx.send(count) {
+                        eprintln!(
+                            "Error sending message {:?} to unbounded channel. ERROR reason: {:?}",
+                            count, err_msg
+                        );
+                        break; // breaks the infinite loop interval if receiver is dropped, or
+                               // basically the unbounded_channel closes (called close() on rx)
+                    }
+                    count += 1;
+                } // Never ending loop
+            });
+
+            UnboundedReceiverStream::new(rx)
+        }
+
+        assert_eq!(
+            helpers::tokio_rt_block_on(async {
+                let interval_stream = get_intervals()
+                    // Mapping the impl Stream<Item = i32>  to impl Stream<Item = StreamResponse<i32>>, so it can be merged with get_messages stream
+                    .map(|x| StreamResponse::<i32>::Interval(x))
+                    // Throttle to reduce the polling frequency of the stream
+                    .throttle(Duration::from_millis(100))
+                    // Timeout
+                    .timeout(Duration::from_millis(200));
+
+                let msgs_stream = get_messages();
+                // Composing the message stream with timeouts
+                let stream_with_timeouts = msgs_stream.timeout(Duration::from_millis(100));
+                // Take only first 50 items from the merged stream
+                let merged_stream = stream_with_timeouts.merge(interval_stream).take(50);
+
+                let mut pinned_merged_stream = pin!(merged_stream); // This needs to be pinned. ToDo: check out later why?
+
+                let mut received = vec![];
+                while let Some(result_from_stream) = pinned_merged_stream.next().await {
+                    // NOTE: that timeout will only tell us that we didn't receive the next item in
+                    // that duration. But unbounded_channel will ensure that we receive the next item in the future polls.
+                    match result_from_stream {
+                        Ok(StreamResponse::Result(msg)) => received.push(msg),
+                        Ok(StreamResponse::Interval(i)) => eprintln!("Interval {i}"),
+                        Err(_) => eprint!("This stream timed-out\n"),
+                    }
+                }
+                received
+            }),
+            // This is a flaky test and might fail since we are taking only first 50 stream items
+            (0..10).collect::<Vec<_>>()
+        );
     }
 }
