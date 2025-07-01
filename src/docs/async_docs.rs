@@ -486,4 +486,78 @@ mod async_docs {
             (0..10).collect::<Vec<_>>()
         );
     }
+
+    #[test]
+    fn closer_look_at_async_traits() {
+        // Future, Stream, StreamExt, Pin, Unpin
+        /* == Future ==
+         * A future is polled, and at every poll, it might be either in pending state or completed.
+         * If it's in pending state, the async runtime gets control, pause work on this future, and
+         * moves to the other pending futures for polling, and check this one later.
+         *
+         * pub trait Future {
+         *      type Output;
+         *      fn poll (self: Pin<&mut Self>, ctx: &mut Context<'_>) -> Poll<Self::Output>;
+         *      // where enum Poll <T> { Ready(T), Pending, }
+         *      // NOTE: this self has a type annotation!
+         *      // generally we have fn f(self, ..) or f(&self, ..) or f(&mut self, ..)
+         * }
+         *
+         * // enum Poll <T> { Ready(T), Pending, }
+         *
+         * == Type annotation on self ==
+         * - Can't be any type, has to be a type on which the method is implemented,
+         *   a reference or a smart pointer to that type, or a "Pin wrapping a reference to that type"
+         */
+
+        /*
+         * == Pin and Unpin ==
+         * Directly awaiting a future, pins the future implicitly. But in cases, where we don't,
+         * like `join_all`, where we are constructing a new future,
+         *
+         * Box<T> implements Future trait, only if the underlying T is a Future that implements Unpin trait.
+         *
+         * Pin is a compile-time wrapper for pointer types (like, &, &ref, &mut ref, Box, Rc..
+         * basically types that implement Deref or DerefMut), and has no runtime-overhead or any
+         * runtime property like Rc (reference counted smart pointer) or others have.
+         *
+         * By default, object that has reference to itself, is unsafe to move in the memory, since
+         * the references still points to the old memory address (which can be stale after move,
+         * overwritten or corrupt) -- so make sure that DS that self-references, isn't allowed to
+         * move (just like the borrow-checker which doesn't allow move when it has active
+         * references).
+         *
+         * So, when you Pin a reference to a value, the value can no longer move.
+         * (NOTE: referencing ds like some smart pointer can still move, but not the underlying memory)
+         * Technically, the value is Pin-ned.
+         * Eg. Pin<Box<SomeType>>, Compiler ensures the value of type SomeType, refered through the
+         * Box smart pointer, is pinned in the memory.
+         *
+         * Pin is implemented by default for every type by Rust.
+         * So, Unpin, tells the compiler that it's safe to move out without worrying about
+         * self-references. Others implement !Unpin (NOTE: read exclaimation mark before) trait.
+         * (Marker traits, just like Send/Sync, are just a way for compiler to ensure a behaviour
+         * for the type in certain context)
+         */
+
+        /* == Stream and StreamExt ==
+         * Iterator -> next
+         * Future -> poll
+         * Stream -> poll_next
+         * trait Stream {
+         *      type Item;
+         *
+         *      fn poll_next(self: Pin<&mut Self>, ctx: &mut Context<'_>) ->
+         *      Poll<Option<Self::Item>> {}
+         * }
+         *
+         * Poll tells whether the next future in this stream is completed or not,
+         * Option tells whether we have more elements coming in the stream or not.
+         *
+         * StreamExt automatically implemented for all types that implement Stream Trait.
+         * So you just need to implement Stream trait for some streaming type and StreamExt will be
+         * available automatically.
+         * StreamExt has some interesting methods.
+         */
+    }
 }
