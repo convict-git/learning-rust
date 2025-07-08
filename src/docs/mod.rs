@@ -1,6 +1,7 @@
 pub mod async_docs;
 pub mod closures;
 pub mod concurrency;
+pub mod design_tradeoffs;
 pub mod guessing_game;
 pub mod lifetimes;
 pub mod match_docs;
