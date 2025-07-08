@@ -1,5 +1,6 @@
 mod collections;
 mod docs;
+mod dsa;
 mod shapes;
 /*
 use shapes::{collisions::Collidable, shape::Shape};
@@ -32,10 +33,7 @@ use crate::{
         strings::{add_assign, deref_coercion, indexing},
         vectors::{try_outs_1, try_outs_2},
     },
-    docs::{
-        closures::check_b, guessing_game::play, match_docs::push_down_reference,
-        packages_crates::eat_at_rest,
-    },
+    docs::{closures::check_b, guessing_game::play, packages_crates::eat_at_rest},
 };
 
 fn main() {
