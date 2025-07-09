@@ -1,3 +1,4 @@
+pub mod advanced_features;
 pub mod async_docs;
 pub mod closures;
 pub mod concurrency;
