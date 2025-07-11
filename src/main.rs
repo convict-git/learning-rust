@@ -33,7 +33,7 @@ use crate::{
         strings::{add_assign, deref_coercion, indexing},
         vectors::{try_outs_1, try_outs_2},
     },
-    docs::{closures::check_b, guessing_game::play, packages_crates::eat_at_rest},
+    docs::{guessing_game::play, packages_crates::eat_at_rest},
 };
 
 fn main() {

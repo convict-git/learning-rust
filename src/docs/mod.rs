@@ -1,6 +1,6 @@
 pub mod advanced_features;
 pub mod async_docs;
-pub mod closures;
+pub mod closures_and_fn_pointers;
 pub mod concurrency;
 pub mod design_tradeoffs;
 pub mod guessing_game;
