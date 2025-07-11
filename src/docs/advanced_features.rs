@@ -81,4 +81,123 @@ mod advanced_features {
         }
         // Coming back to unsafe rust after some time.. It isn't needed right now.
     }
+
+    mod advanced_traits_and_types {
+        #[test]
+        fn associated_types() {
+            /*
+            What's the different between having an associated type vs generic?
+            trait Iterator {
+                 type Item;
+                 fn next(&mut self) -> Option<Self::Item>;
+                 ...
+            }
+
+            trait Iterator<T> {
+                 fn next(&mut self) -> Option<T>;
+                 ...
+            }
+
+            So, if you were to implement this trait for some type X, in case of associated type,
+            there's exactly one value of Item that you'd specify, say:
+            impl Iterator for X {
+                 type Item = i32;
+                 fn next(&mut self) -> Option<Self::Item> { ... }
+            }
+
+            but in case of generics, you will have the free generic T, and will require to
+            specify T everytime you call next on X.
+
+            impl Iterator<T> for X {
+                 fn next(&mut self) -> Option<T> { ...  }
+            }
+
+            But this may not be required..
+            * */
+        }
+
+        #[test]
+        fn operator_overloading() {
+            use std::ops::Add;
+            #[derive(Debug, Copy, Clone, PartialEq)]
+            struct Point {
+                x: i32,
+                y: i32,
+            }
+
+            impl Add for Point {
+                // Add<Rhs=Self> // default generic is Self
+                type Output = Point;
+
+                fn add(self, rhs: Self) -> Self::Output {
+                    Point {
+                        x: self.x + rhs.x,
+                        y: self.y + rhs.y,
+                    }
+                }
+            }
+
+            impl Add<i32> for Point {
+                type Output = Point;
+
+                fn add(self, rhs: i32) -> Self::Output {
+                    Point {
+                        x: self.x + rhs,
+                        y: self.y + rhs,
+                    }
+                }
+            }
+
+            assert_eq!(
+                Point { x: 1, y: 2 } + Point { x: 0, y: 3 },
+                Point { x: 1, y: 5 }
+            );
+            assert_eq!(Point { x: 1, y: 2 } + 2, Point { x: 3, y: 4 });
+        }
+
+        #[test]
+        fn newtype() {
+            // NewType pattern helps implement external traits on external types
+            struct VecStrWrapper(Vec<String>); // A tuple struct
+            let wrapper_inst = VecStrWrapper(vec![String::from("hello"), String::from("world")]);
+
+            // Implementing an external trait Display for VecStrWrapper (techically for Vec<String>, an external type)
+            impl std::fmt::Display for VecStrWrapper {
+                fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                    write!(f, "[{}]", self.0.join(", "))
+                }
+            }
+            assert_eq!(wrapper_inst.to_string(), "[hello, world]");
+
+            // If we still want all the methods for the encapsulated type through the new type,
+            // we can implement a deref for it
+            impl std::ops::Deref for VecStrWrapper {
+                type Target = Vec<String>;
+
+                fn deref(&self) -> &Self::Target {
+                    &self.0
+                }
+            }
+            assert_eq!(wrapper_inst.len(), 2);
+
+            // But if the whole point was to differentiate between the wrapper and the encapsulated
+            // type, say, in some API, then deref/deref_mut might break the cause in borrow APIs
+        }
+
+        #[test]
+        fn type_alias() {
+            // Similar to typescript
+            // NOTE: Useful only for reducing repition, but doesn't differentiate as different types
+            // type Km = i32 // will treat Km as i32 and it can be used interchangibly
+
+            type Thunk = Box<dyn Fn() + Send + 'static>;
+
+            let f: Thunk = Box::new(|| println!("hello"));
+            fn _x_f(_inp_thunk_fn: Thunk) { /* .. */
+            }
+            fn _y_f() -> Thunk {
+                todo!()
+            }
+        }
+    }
 }
