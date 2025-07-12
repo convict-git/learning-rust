@@ -11,3 +11,4 @@ pub mod oops;
 pub mod ownership_inventory;
 pub mod packages_crates;
 pub mod smart_pointers;
+pub mod str_fuss;
