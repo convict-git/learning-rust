@@ -36,7 +36,7 @@ impl Contains for Rect {
 }
 
 impl Points for Rect {
-    fn points(&self) -> PointsIter {
+    fn get_points_iter(&self) -> PointsIter {
         return vec![
             (self.x, self.y),
             (self.x, self.y + self.height),
