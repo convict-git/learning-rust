@@ -5,6 +5,7 @@ pub mod concurrency;
 pub mod design_tradeoffs;
 pub mod guessing_game;
 pub mod lifetimes;
+pub mod macros;
 pub mod match_docs;
 pub mod oops;
 pub mod ownership_inventory;
